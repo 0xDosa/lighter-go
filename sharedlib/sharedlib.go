@@ -884,6 +884,7 @@ func SignUpdateLeverage(cMarketIndex C.int, cInitialMarginFraction C.int, cMargi
 
 	marketIndex := uint8(cMarketIndex)
 	initialMarginFraction := uint16(cInitialMarginFraction)
+	marginMode := uint8(cMarginMode)
 	nonce := int64(cNonce)
 	marginMode := uint8(cMarginMode)
 
