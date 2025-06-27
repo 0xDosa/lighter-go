@@ -1430,7 +1430,98 @@ func signUpdateLeverage(this js.Value, args []js.Value) any {
 	return js.ValueOf(string(jsonBytes))
 }
 
-// Function #17: CreateAuthToken (matches C.StrOrErr - returns auth token string)
+// Function #17: SignUpdateMargin (matches C.StrOrErr - returns transaction JSON)
+func signUpdateMargin(this js.Value, args []js.Value) any {
+	response := StringResponse{}
+
+	defer func() {
+		if r := recover(); r != nil {
+			response.Error = fmt.Sprintf("%v", r)
+		}
+	}()
+
+	// Validate argument count
+	if len(args) != 4 {
+		response.Error = "signUpdateMargin requires 4 arguments: marketIndex, usdcAmount, direction, nonce"
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Validate all required arguments
+	if err := validateArg(args, 0, "marketIndex"); err != nil {
+		response.Error = err.Error()
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+	if err := validateArg(args, 1, "usdcAmount"); err != nil {
+		response.Error = err.Error()
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+	if err := validateArg(args, 2, "direction"); err != nil {
+		response.Error = err.Error()
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+	if err := validateArg(args, 3, "nonce"); err != nil {
+		response.Error = err.Error()
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Check if client exists
+	if txClient == nil {
+		response.Error = "client is not created, call CreateClient() first"
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Extract parameters from JavaScript arguments
+	marketIndex := uint8(args[0].Int())
+	usdcAmount := uint64(args[1].Int())
+	direction := uint8(args[2].Int())
+	nonce := int64(args[3].Int())
+
+	// Create transaction request
+	txInfo := &types.UpdateMarginTxReq{
+		MarketIndex: marketIndex,
+		USDCAmount:  usdcAmount,
+		Direction:   direction,
+	}
+	ops := new(types.TransactOpts)
+	if nonce != -1 {
+		ops.Nonce = &nonce
+	}
+
+	// Get transaction from client
+	tx, err := txClient.GetUpdateMarginTransaction(txInfo, ops)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to create transaction: %v", err)
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Marshal transaction to JSON
+	txInfoBytes, err := json.Marshal(tx)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to marshal transaction: %v", err)
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Success case - return transaction JSON
+	response.Result = string(txInfoBytes)
+	jsonBytes, err := json.Marshal(response)
+	if err != nil {
+		response.Error = fmt.Sprintf("JSON marshal error: %v", err)
+		errorBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(errorBytes))
+	}
+
+	return js.ValueOf(string(jsonBytes))
+}
+
+// Function #18: CreateAuthToken (matches C.StrOrErr - returns auth token string)
 func createAuthToken(this js.Value, args []js.Value) any {
 	response := StringResponse{}
 
@@ -1498,6 +1589,7 @@ func main() {
 	js.Global().Set("signMintShares", js.FuncOf(signMintShares))
 	js.Global().Set("signBurnShares", js.FuncOf(signBurnShares))
 	js.Global().Set("signUpdateLeverage", js.FuncOf(signUpdateLeverage))
+	js.Global().Set("signUpdateMargin", js.FuncOf(signUpdateMargin))
 	js.Global().Set("createAuthToken", js.FuncOf(createAuthToken))
 
 	// Keep the program running

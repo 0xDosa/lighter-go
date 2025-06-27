@@ -11,7 +11,7 @@ type L2UpdateMarginTxInfo struct {
 	AccountIndex int64
 	ApiKeyIndex  uint8
 	MarketIndex  uint8
-	USDCAmount   int64 // USDCAmount is given with 6 decimals. Can be negative to remove margin.
+	USDCAmount   uint64 // USDCAmount is given with 6 decimals. Can be negative to remove margin.
 	Direction    uint8 // 0 for LONG, 1 for SHORT
 	ExpiredAt    int64
 	Nonce        int64
@@ -71,7 +71,7 @@ func (txInfo *L2UpdateMarginTxInfo) Hash(lighterChainId uint32, extra ...g.Eleme
 	elems = append(elems, g.FromUint32(uint32(txInfo.MarketIndex)))
 	elems = append(elems, g.FromUint32(uint32(txInfo.Direction)))
 
-	usdcAmountField := g.FromInt64(txInfo.USDCAmount)
+	usdcAmountField := g.FromUint64(txInfo.USDCAmount)
 	elems = append(elems, usdcAmountField)
 
 	return p2.HashToQuinticExtension(elems).ToLittleEndianBytes(), nil

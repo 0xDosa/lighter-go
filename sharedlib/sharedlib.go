@@ -905,7 +905,7 @@ func SignUpdateMargin(cMarketIndex C.int, cUSDCAmount C.longlong, cDirection C.i
 	}
 
 	marketIndex := uint8(cMarketIndex)
-	usdcAmount := int64(cUSDCAmount)
+	usdcAmount := uint64(cUSDCAmount)
 	direction := uint8(cDirection)
 	nonce := int64(cNonce)
 
