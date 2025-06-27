@@ -1,4 +1,4 @@
-//go:build !js && !wasm
+//go:build js && wasm
 
 package client
 
@@ -6,11 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/elliottech/lighter-go/types/txtypes"
 )
@@ -38,16 +36,14 @@ func (c *HTTPClient) getAndParseL2HTTPResponse(path string, params map[string]an
 		q.Set(k, fmt.Sprintf("%v", v))
 	}
 	u.RawQuery = q.Encode()
-	resp, err := httpClient.Get(u.String())
+
+	// Use WASM fetch instead of standard HTTP client
+	body, statusCode, err := wasmFetch("GET", u.String(), nil, "")
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
+
+	if statusCode != http.StatusOK {
 		return errors.New(string(body))
 	}
 	if err = c.parseResultStatus(body); err != nil {
@@ -90,19 +86,18 @@ func (c *HTTPClient) SendRawTx(tx txtypes.TxInfo) (string, error) {
 		data.Add("price_protection", "false")
 	}
 
-	req, _ := http.NewRequest("POST", c.endpoint+"/api/v1/sendTx", strings.NewReader(data.Encode()))
-	req.Header.Set("Channel-Name", c.channelName)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := httpClient.Do(req)
+	headers := map[string]string{
+		"Channel-Name": c.channelName,
+		"Content-Type": "application/x-www-form-urlencoded",
+	}
+
+	// Use WASM fetch for POST request
+	body, statusCode, err := wasmFetch("POST", c.endpoint+"/api/v1/sendTx", headers, data.Encode())
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode != http.StatusOK {
+
+	if statusCode != http.StatusOK {
 		return "", errors.New(string(body))
 	}
 	if err = c.parseResultStatus(body); err != nil {

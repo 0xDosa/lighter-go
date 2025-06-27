@@ -58,4 +58,5 @@ var (
 	ErrGroupingTypeInvalid             = fmt.Errorf("GroupingType is not valid")
 	ErrOrderGroupSizeInvalid           = fmt.Errorf("OrderGroupSize is not valid")
 	ErrInvalidSignature                = fmt.Errorf("TxSignature is invalid")
+	ErrMarginModeInvalid               = fmt.Errorf("MarginMode should be 0 or 1")
 )

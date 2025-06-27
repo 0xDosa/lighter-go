@@ -97,6 +97,7 @@ type BurnSharesTxReq struct {
 type UpdateLeverageTxReq struct {
 	MarketIndex           uint8
 	InitialMarginFraction uint16
+	MarginMode            uint8
 }
 
 func ConstructAuthToken(key signer.Signer, deadline time.Time, ops *TransactOpts) (string, error) {
@@ -608,6 +609,7 @@ func ConvertUpdateLeverageTx(tx *UpdateLeverageTxReq, ops *TransactOpts) *txtype
 		ApiKeyIndex:           *ops.ApiKeyIndex,
 		MarketIndex:           tx.MarketIndex,
 		InitialMarginFraction: tx.InitialMarginFraction,
+		MarginMode:            tx.MarginMode,
 		ExpiredAt:             ops.ExpiredAt,
 		Nonce:                 *ops.Nonce,
 	}

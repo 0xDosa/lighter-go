@@ -826,7 +826,7 @@ func SignBurnShares(cPublicPoolIndex C.longlong, cShareAmount C.longlong, cNonce
 }
 
 //export SignUpdateLeverage
-func SignUpdateLeverage(cMarketIndex C.int, cInitialMarginFraction C.int, cNonce C.longlong) (ret C.StrOrErr) {
+func SignUpdateLeverage(cMarketIndex C.int, cInitialMarginFraction C.int, cMarginMode C.int, cNonce C.longlong) (ret C.StrOrErr) {
 	var err error
 	var txInfoStr string
 
@@ -852,11 +852,13 @@ func SignUpdateLeverage(cMarketIndex C.int, cInitialMarginFraction C.int, cNonce
 
 	marketIndex := uint8(cMarketIndex)
 	initialMarginFraction := uint16(cInitialMarginFraction)
+	marginMode := uint8(cMarginMode)
 	nonce := int64(cNonce)
 
 	txInfo := &types.UpdateLeverageTxReq{
 		MarketIndex:           marketIndex,
 		InitialMarginFraction: initialMarginFraction,
+		MarginMode:            marginMode,
 	}
 	ops := new(types.TransactOpts)
 	if nonce != -1 {
