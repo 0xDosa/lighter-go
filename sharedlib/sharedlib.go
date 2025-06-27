@@ -912,6 +912,60 @@ func SignUpdateLeverage(cMarketIndex C.int, cInitialMarginFraction C.int, cMargi
 	return
 }
 
+//export SignUpdateMargin
+func SignUpdateMargin(cMarketIndex C.int, cUSDCAmount C.longlong, cDirection C.int, cNonce C.longlong) (ret C.StrOrErr) {
+	var err error
+	var txInfoStr string
+
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%v", r)
+		}
+		if err != nil {
+			ret = C.StrOrErr{
+				err: wrapErr(err),
+			}
+		} else {
+			ret = C.StrOrErr{
+				str: C.CString(txInfoStr),
+			}
+		}
+	}()
+
+	if txClient == nil {
+		err = fmt.Errorf("client is not created, call CreateClient() first")
+		return
+	}
+
+	marketIndex := uint8(cMarketIndex)
+	usdcAmount := int64(cUSDCAmount)
+	direction := uint8(cDirection)
+	nonce := int64(cNonce)
+
+	txInfo := &types.UpdateMarginTxReq{
+		MarketIndex: marketIndex,
+		USDCAmount:  usdcAmount,
+		Direction:   direction,
+	}
+	ops := new(types.TransactOpts)
+	if nonce != -1 {
+		ops.Nonce = &nonce
+	}
+
+	tx, err := txClient.GetUpdateMarginTransaction(txInfo, ops)
+	if err != nil {
+		return
+	}
+
+	txInfoBytes, err := json.Marshal(tx)
+	if err != nil {
+		return
+	}
+
+	txInfoStr = string(txInfoBytes)
+	return
+}
+
 //export CreateAuthToken
 func CreateAuthToken(cDeadline C.longlong) (ret C.StrOrErr) {
 	var err error
