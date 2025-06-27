@@ -174,3 +174,15 @@ func (c *TxClient) GetUpdateLeverageTransaction(tx *types.UpdateLeverageTxReq, o
 	}
 	return txInfo, nil
 }
+
+func (c *TxClient) GetUpdateMarginTransaction(tx *types.UpdateMarginTxReq, ops *types.TransactOpts) (*txtypes.L2UpdateMarginTxInfo, error) {
+	ops, err := c.FullFillDefaultOps(ops)
+	if err != nil {
+		return nil, err
+	}
+	txInfo, err := types.ConstructUpdateMarginTx(c.keyManager, c.chainId, tx, ops)
+	if err != nil {
+		return nil, err
+	}
+	return txInfo, nil
+}

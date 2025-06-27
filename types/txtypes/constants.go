@@ -40,6 +40,7 @@ const (
 	TxTypeInternalCreateOrder       = 27
 
 	TxTypeL2CreateGroupedOrders = 28
+	TxTypeL2UpdateMargin        = 29
 )
 
 // Order Type
