@@ -66,13 +66,13 @@ func (txInfo *L2UpdateMarginTxInfo) Hash(lighterChainId uint32, extra ...g.Eleme
 	elems = append(elems, g.FromUint32(TxTypeL2UpdateMargin))
 	elems = append(elems, g.FromInt64(txInfo.Nonce))
 	elems = append(elems, g.FromInt64(txInfo.ExpiredAt))
+
 	elems = append(elems, g.FromInt64(txInfo.AccountIndex))
 	elems = append(elems, g.FromUint32(uint32(txInfo.ApiKeyIndex)))
-	elems = append(elems, g.FromUint32(uint32(txInfo.MarketIndex)))
+	elems = append(elems, g.FromInt64(int64(txInfo.MarketIndex)))
+	elems = append(elems, g.FromUint64(uint64(txInfo.USDCAmount)&0xFFFFFFFF)) //nolint:gosec
+	elems = append(elems, g.FromUint64(uint64(txInfo.USDCAmount)>>32))        //nolint:gosec
 	elems = append(elems, g.FromUint32(uint32(txInfo.Direction)))
-
-	usdcAmountField := g.FromUint64(txInfo.USDCAmount)
-	elems = append(elems, usdcAmountField)
 
 	return p2.HashToQuinticExtension(elems).ToLittleEndianBytes(), nil
 } 
