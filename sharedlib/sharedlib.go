@@ -933,6 +933,169 @@ func SignUpdateMargin(cMarketIndex C.int, cUSDCAmount C.longlong, cDirection C.i
 	return
 }
 
+//export SignL2CreateGroupedOrders
+func SignL2CreateGroupedOrders(
+	cGroupingType C.int,
+	cExpiredAt C.longlong,
+	cNonce C.longlong,
+	// Order 1 parameters (primary order)
+	cOrder1_MarketIndex C.int, cOrder1_BaseAmount C.longlong, cOrder1_Price C.int,
+	cOrder1_IsAsk C.int, cOrder1_Type C.int, cOrder1_TimeInForce C.int,
+	cOrder1_ReduceOnly C.int, cOrder1_TriggerPrice C.int, cOrder1_OrderExpiry C.longlong,
+	// Order 2 parameters
+	cOrder2_MarketIndex C.int, cOrder2_BaseAmount C.longlong, cOrder2_Price C.int,
+	cOrder2_IsAsk C.int, cOrder2_Type C.int, cOrder2_TimeInForce C.int,
+	cOrder2_ReduceOnly C.int, cOrder2_TriggerPrice C.int, cOrder2_OrderExpiry C.longlong,
+	// Order 3 parameters (optional - set MarketIndex to -1 if not used)
+	cOrder3_MarketIndex C.int, cOrder3_BaseAmount C.longlong, cOrder3_Price C.int,
+	cOrder3_IsAsk C.int, cOrder3_Type C.int, cOrder3_TimeInForce C.int,
+	cOrder3_ReduceOnly C.int, cOrder3_TriggerPrice C.int, cOrder3_OrderExpiry C.longlong,
+) (ret C.StrOrErr) {
+	var err error
+	var txInfoStr string
+
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%v", r)
+		}
+		if err != nil {
+			ret = C.StrOrErr{
+				err: wrapErr(err),
+			}
+		} else {
+			ret = C.StrOrErr{
+				str: C.CString(txInfoStr),
+			}
+		}
+	}()
+
+	if txClient == nil {
+		err = fmt.Errorf("client is not created, call CreateClient() first")
+		return
+	}
+
+	// Extract parameters from C arguments
+	groupingType := uint8(cGroupingType)
+	expiredAt := int64(cExpiredAt)
+	nonce := int64(cNonce)
+
+	// Build orders array
+	orders := []*types.CreateOrderTxReq{}
+
+	// Order 1 (always present)
+	order1MarketIndex := uint8(cOrder1_MarketIndex)
+	order1BaseAmount := int64(cOrder1_BaseAmount)
+	order1Price := uint32(cOrder1_Price)
+	order1IsAsk := uint8(cOrder1_IsAsk)
+	order1Type := uint8(cOrder1_Type)
+	order1TimeInForce := uint8(cOrder1_TimeInForce)
+	order1ReduceOnly := uint8(cOrder1_ReduceOnly)
+	order1TriggerPrice := uint32(cOrder1_TriggerPrice)
+	order1OrderExpiry := int64(cOrder1_OrderExpiry)
+
+	if order1OrderExpiry == -1 {
+		order1OrderExpiry = time.Now().Add(time.Hour * 24 * 28).UnixMilli() // 28 days
+	}
+
+	orders = append(orders, &types.CreateOrderTxReq{
+		MarketIndex:      order1MarketIndex,
+		ClientOrderIndex: 0, // Must be NilClientOrderIndex (0) for grouped orders
+		BaseAmount:       order1BaseAmount,
+		Price:            order1Price,
+		IsAsk:            order1IsAsk,
+		Type:             order1Type,
+		TimeInForce:      order1TimeInForce,
+		ReduceOnly:       order1ReduceOnly,
+		TriggerPrice:     order1TriggerPrice,
+		OrderExpiry:      order1OrderExpiry,
+	})
+
+	// Order 2 (always present)
+	order2MarketIndex := uint8(cOrder2_MarketIndex)
+	order2BaseAmount := int64(cOrder2_BaseAmount)
+	order2Price := uint32(cOrder2_Price)
+	order2IsAsk := uint8(cOrder2_IsAsk)
+	order2Type := uint8(cOrder2_Type)
+	order2TimeInForce := uint8(cOrder2_TimeInForce)
+	order2ReduceOnly := uint8(cOrder2_ReduceOnly)
+	order2TriggerPrice := uint32(cOrder2_TriggerPrice)
+	order2OrderExpiry := int64(cOrder2_OrderExpiry)
+
+	if order2OrderExpiry == -1 {
+		order2OrderExpiry = time.Now().Add(time.Hour * 24 * 28).UnixMilli() // 28 days
+	}
+
+	orders = append(orders, &types.CreateOrderTxReq{
+		MarketIndex:      order2MarketIndex,
+		ClientOrderIndex: 0, // Must be NilClientOrderIndex (0) for grouped orders
+		BaseAmount:       order2BaseAmount,
+		Price:            order2Price,
+		IsAsk:            order2IsAsk,
+		Type:             order2Type,
+		TimeInForce:      order2TimeInForce,
+		ReduceOnly:       order2ReduceOnly,
+		TriggerPrice:     order2TriggerPrice,
+		OrderExpiry:      order2OrderExpiry,
+	})
+
+	// Order 3 (optional - only for OTOCO grouping type)
+	order3MarketIndex := int(cOrder3_MarketIndex)
+	if order3MarketIndex != -1 {
+		order3BaseAmount := int64(cOrder3_BaseAmount)
+		order3Price := uint32(cOrder3_Price)
+		order3IsAsk := uint8(cOrder3_IsAsk)
+		order3Type := uint8(cOrder3_Type)
+		order3TimeInForce := uint8(cOrder3_TimeInForce)
+		order3ReduceOnly := uint8(cOrder3_ReduceOnly)
+		order3TriggerPrice := uint32(cOrder3_TriggerPrice)
+		order3OrderExpiry := int64(cOrder3_OrderExpiry)
+
+		if order3OrderExpiry == -1 {
+			order3OrderExpiry = time.Now().Add(time.Hour * 24 * 28).UnixMilli() // 28 days
+		}
+
+		orders = append(orders, &types.CreateOrderTxReq{
+			MarketIndex:      uint8(order3MarketIndex),
+			ClientOrderIndex: 0, // Must be NilClientOrderIndex (0) for grouped orders
+			BaseAmount:       order3BaseAmount,
+			Price:            order3Price,
+			IsAsk:            order3IsAsk,
+			Type:             order3Type,
+			TimeInForce:      order3TimeInForce,
+			ReduceOnly:       order3ReduceOnly,
+			TriggerPrice:     order3TriggerPrice,
+			OrderExpiry:      order3OrderExpiry,
+		})
+	}
+
+	// Create transaction request
+	txInfo := &types.CreateGroupedOrdersTxReq{
+		GroupingType: groupingType,
+		Orders:       orders,
+	}
+
+	ops := new(types.TransactOpts)
+	if nonce != -1 {
+		ops.Nonce = &nonce
+	}
+	if expiredAt != -1 {
+		ops.ExpiredAt = expiredAt
+	}
+
+	tx, err := txClient.GetCreateGroupedOrdersTransaction(txInfo, ops)
+	if err != nil {
+		return
+	}
+
+	txInfoBytes, err := json.Marshal(tx)
+	if err != nil {
+		return
+	}
+
+	txInfoStr = string(txInfoBytes)
+	return
+}
+
 //export CreateAuthToken
 func CreateAuthToken(cDeadline C.longlong) (ret C.StrOrErr) {
 	var err error

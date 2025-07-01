@@ -1521,7 +1521,150 @@ func signUpdateMargin(this js.Value, args []js.Value) any {
 	return js.ValueOf(string(jsonBytes))
 }
 
-// Function #18: CreateAuthToken (matches C.StrOrErr - returns auth token string)
+// Function #18: SignCreateGroupedOrders (matches C.StrOrErr - returns transaction JSON)
+func signCreateGroupedOrders(this js.Value, args []js.Value) any {
+	response := StringResponse{}
+
+	defer func() {
+		if r := recover(); r != nil {
+			response.Error = fmt.Sprintf("%v", r)
+		}
+	}()
+
+	// Validate argument count
+	if len(args) != 4 {
+		response.Error = "signCreateGroupedOrders requires 4 arguments: groupingType, ordersJSON, expiredAt, nonce"
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Validate all required arguments
+	if err := validateArg(args, 0, "groupingType"); err != nil {
+		response.Error = err.Error()
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+	if err := validateArg(args, 1, "ordersJSON"); err != nil {
+		response.Error = err.Error()
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+	if err := validateArg(args, 2, "expiredAt"); err != nil {
+		response.Error = err.Error()
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+	if err := validateArg(args, 3, "nonce"); err != nil {
+		response.Error = err.Error()
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Check if client exists
+	if txClient == nil {
+		response.Error = "client is not created, call CreateClient() first"
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Extract parameters from JavaScript arguments
+	groupingType := uint8(args[0].Int())
+	ordersJSON := args[1].String()
+	expiredAt := int64(args[2].Int())
+	nonce := int64(args[3].Int())
+
+	// Parse orders JSON
+	var orderRequests []struct {
+		MarketIndex  uint8  `json:"marketIndex"`
+		BaseAmount   int64  `json:"baseAmount"`
+		Price        uint32 `json:"price"`
+		IsAsk        uint8  `json:"isAsk"`
+		Type         uint8  `json:"type"`
+		TimeInForce  uint8  `json:"timeInForce"`
+		ReduceOnly   uint8  `json:"reduceOnly"`
+		TriggerPrice uint32 `json:"triggerPrice"`
+		OrderExpiry  int64  `json:"orderExpiry"`
+	}
+
+	err := json.Unmarshal([]byte(ordersJSON), &orderRequests)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to parse ordersJSON: %v", err)
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Validate orders count
+	if len(orderRequests) < 2 || len(orderRequests) > 3 {
+		response.Error = "grouped orders must contain 2 or 3 orders"
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Build orders array
+	orders := []*types.CreateOrderTxReq{}
+	for _, orderReq := range orderRequests {
+		orderExpiry := orderReq.OrderExpiry
+		if orderExpiry == -1 {
+			orderExpiry = time.Now().Add(time.Hour * 24 * 28).UnixMilli() // 28 days
+		}
+
+		orders = append(orders, &types.CreateOrderTxReq{
+			MarketIndex:      orderReq.MarketIndex,
+			ClientOrderIndex: 0, // Must be NilClientOrderIndex (0) for grouped orders
+			BaseAmount:       orderReq.BaseAmount,
+			Price:            orderReq.Price,
+			IsAsk:            orderReq.IsAsk,
+			Type:             orderReq.Type,
+			TimeInForce:      orderReq.TimeInForce,
+			ReduceOnly:       orderReq.ReduceOnly,
+			TriggerPrice:     orderReq.TriggerPrice,
+			OrderExpiry:      orderExpiry,
+		})
+	}
+
+	// Create transaction request
+	txInfo := &types.CreateGroupedOrdersTxReq{
+		GroupingType: groupingType,
+		Orders:       orders,
+	}
+
+	ops := new(types.TransactOpts)
+	if nonce != -1 {
+		ops.Nonce = &nonce
+	}
+	if expiredAt != -1 {
+		ops.ExpiredAt = expiredAt
+	}
+
+	// Get transaction from client
+	tx, err := txClient.GetCreateGroupedOrdersTransaction(txInfo, ops)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to create transaction: %v", err)
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Marshal transaction to JSON
+	txInfoBytes, err := json.Marshal(tx)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to marshal transaction: %v", err)
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Success case - return transaction JSON
+	response.Result = string(txInfoBytes)
+	jsonBytes, err := json.Marshal(response)
+	if err != nil {
+		response.Error = fmt.Sprintf("JSON marshal error: %v", err)
+		errorBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(errorBytes))
+	}
+
+	return js.ValueOf(string(jsonBytes))
+}
+
+// Function #19: CreateAuthToken (matches C.StrOrErr - returns auth token string)
 func createAuthToken(this js.Value, args []js.Value) any {
 	response := StringResponse{}
 
@@ -1590,6 +1733,7 @@ func main() {
 	js.Global().Set("signBurnShares", js.FuncOf(signBurnShares))
 	js.Global().Set("signUpdateLeverage", js.FuncOf(signUpdateLeverage))
 	js.Global().Set("signUpdateMargin", js.FuncOf(signUpdateMargin))
+	js.Global().Set("signCreateGroupedOrders", js.FuncOf(signCreateGroupedOrders))
 	js.Global().Set("createAuthToken", js.FuncOf(createAuthToken))
 
 	// Keep the program running
