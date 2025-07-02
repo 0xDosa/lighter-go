@@ -5,12 +5,12 @@ import {
   CHAIN_ID,
   SEED_PHRASE,
   URL,
-} from "../base.ts";
-import {
+} from "../base";
+import { 
   OrderType,
   TimeInForce,
   NilOrderTriggerPrice,
-} from "../../signerConstants.ts";
+} from "../../signerConstants";
 
 console.log("🧪 Testing signCreateGroupedOrders: OCO, OTO, and OTOCO...");
 
@@ -46,7 +46,7 @@ async function runTest() {
           baseAmount: 401, // Same base amount for both OCO orders
           price: 210000, // Take profit price
           isAsk: 1, // sell
-          type: OrderType.TakeProfitOrder,
+          orderType: OrderType.TakeProfitOrder,
           timeInForce: TimeInForce.ImmediateOrCancel,
           reduceOnly: 1, // OCO orders must be reduce-only
           triggerPrice: 210000,
@@ -57,7 +57,7 @@ async function runTest() {
           baseAmount: 401, // Same base amount for OCO
           price: 190000, // Stop loss price
           isAsk: 1, // sell (same direction for OCO)
-          type: OrderType.StopLossOrder,
+          orderType: OrderType.StopLossOrder,
           timeInForce: TimeInForce.ImmediateOrCancel,
           reduceOnly: 1, // OCO orders must be reduce-only
           triggerPrice: 190000,
@@ -70,11 +70,7 @@ async function runTest() {
     console.log("📝 OCO Params:", JSON.stringify(ocoParams, null, 2));
 
     const signedOCO = await signer.signCreateGroupedOrders(ocoParams);
-    if (
-      !signedOCO ||
-      !signedOCO.Nonce ||
-      signedOCO.GroupingType !== GroupingType.OCO
-    ) {
+    if (!signedOCO || !signedOCO.Nonce || signedOCO.GroupingType !== GroupingType.OCO) {
       throw new Error("OCO order signing failed.");
     }
     console.log("✅ OCO Order signed successfully.");
@@ -91,7 +87,7 @@ async function runTest() {
           baseAmount: 401,
           price: 200000,
           isAsk: 0, // buy
-          type: OrderType.LimitOrder,
+          orderType: OrderType.LimitOrder,
           timeInForce: TimeInForce.GoodTillTime,
           reduceOnly: 0,
           triggerPrice: NilOrderTriggerPrice,
@@ -103,7 +99,7 @@ async function runTest() {
           baseAmount: 0, // Child orders have 0 base amount in OTO
           price: 1, // Minimal price for child orders
           isAsk: 1, // sell (opposite direction)
-          type: OrderType.TakeProfitOrder,
+          orderType: OrderType.TakeProfitOrder,
           timeInForce: TimeInForce.ImmediateOrCancel,
           reduceOnly: 1, // Child orders are reduce-only
           triggerPrice: 210000,
@@ -116,11 +112,7 @@ async function runTest() {
     console.log("📝 OTO Params:", JSON.stringify(otoParams, null, 2));
 
     const signedOTO = await signer.signCreateGroupedOrders(otoParams);
-    if (
-      !signedOTO ||
-      !signedOTO.Nonce ||
-      signedOTO.GroupingType !== GroupingType.OTO
-    ) {
+    if (!signedOTO || !signedOTO.Nonce || signedOTO.GroupingType !== GroupingType.OTO) {
       throw new Error("OTO order signing failed.");
     }
     console.log("✅ OTO Order signed successfully.");
@@ -137,7 +129,7 @@ async function runTest() {
           baseAmount: 401,
           price: 200000,
           isAsk: 0, // buy
-          type: OrderType.LimitOrder, // Type 0
+          orderType: OrderType.LimitOrder, // Type 0
           timeInForce: TimeInForce.GoodTillTime, // Type 1
           reduceOnly: 0,
           triggerPrice: NilOrderTriggerPrice, // 0
@@ -149,7 +141,7 @@ async function runTest() {
           baseAmount: 0, // Child orders have 0 base amount
           price: 1, // Minimal price as in real data
           isAsk: 1, // sell (opposite direction)
-          type: OrderType.TakeProfitOrder, // Type 4
+          orderType: OrderType.TakeProfitOrder, // Type 4
           timeInForce: TimeInForce.ImmediateOrCancel, // Type 0
           reduceOnly: 1, // Must be reduce-only
           triggerPrice: 210000, // Take profit trigger
@@ -161,7 +153,7 @@ async function runTest() {
           baseAmount: 0, // Child orders have 0 base amount
           price: 1, // Minimal price as in real data
           isAsk: 1, // sell (opposite direction)
-          type: OrderType.StopLossOrder, // Type 2
+          orderType: OrderType.StopLossOrder, // Type 2
           timeInForce: TimeInForce.ImmediateOrCancel, // Type 0
           reduceOnly: 1, // Must be reduce-only
           triggerPrice: 190000, // Stop loss trigger
@@ -174,11 +166,7 @@ async function runTest() {
     console.log("📝 OTOCO Params:", JSON.stringify(otocoParams, null, 2));
 
     const signedOTOCO = await signer.signCreateGroupedOrders(otocoParams);
-    if (
-      !signedOTOCO ||
-      !signedOTOCO.Nonce ||
-      signedOTOCO.GroupingType !== GroupingType.OTOCO
-    ) {
+    if (!signedOTOCO || !signedOTOCO.Nonce || signedOTOCO.GroupingType !== GroupingType.OTOCO) {
       throw new Error("OTOCO order signing failed.");
     }
     console.log("✅ OTOCO Order signed successfully.");
@@ -186,29 +174,20 @@ async function runTest() {
 
     // Verify the structure matches real data pattern
     console.log("\n🔍 Verifying OTOCO structure matches real data pattern:");
-    console.log(
-      `AccountIndex: ${signedOTOCO.AccountIndex} (should be ${ACCOUNT_INDEX})`
-    );
-    console.log(
-      `ApiKeyIndex: ${signedOTOCO.ApiKeyIndex} (should be ${API_KEY_INDEX})`
-    );
+    console.log(`AccountIndex: ${signedOTOCO.AccountIndex} (should be ${ACCOUNT_INDEX})`);
+    console.log(`ApiKeyIndex: ${signedOTOCO.ApiKeyIndex} (should be ${API_KEY_INDEX})`);
     console.log(`GroupingType: ${signedOTOCO.GroupingType} (should be 3)`);
     console.log(`Orders count: ${signedOTOCO.Orders.length} (should be 3)`);
-
+    
     if (signedOTOCO.Orders.length === 3) {
       const [primary, takeProfit, stopLoss] = signedOTOCO.Orders;
-      console.log(
-        `Primary order - BaseAmount: ${primary.BaseAmount}, IsAsk: ${primary.IsAsk}, Type: ${primary.Type}`
-      );
-      console.log(
-        `Take Profit - BaseAmount: ${takeProfit.BaseAmount}, IsAsk: ${takeProfit.IsAsk}, Type: ${takeProfit.Type}, TriggerPrice: ${takeProfit.TriggerPrice}`
-      );
-      console.log(
-        `Stop Loss - BaseAmount: ${stopLoss.BaseAmount}, IsAsk: ${stopLoss.IsAsk}, Type: ${stopLoss.Type}, TriggerPrice: ${stopLoss.TriggerPrice}`
-      );
+      console.log(`Primary order - BaseAmount: ${primary.BaseAmount}, IsAsk: ${primary.IsAsk}, Type: ${primary.Type}`);
+      console.log(`Take Profit - BaseAmount: ${takeProfit.BaseAmount}, IsAsk: ${takeProfit.IsAsk}, Type: ${takeProfit.Type}, TriggerPrice: ${takeProfit.TriggerPrice}`);
+      console.log(`Stop Loss - BaseAmount: ${stopLoss.BaseAmount}, IsAsk: ${stopLoss.IsAsk}, Type: ${stopLoss.Type}, TriggerPrice: ${stopLoss.TriggerPrice}`);
     }
 
     console.log("\n🎉 All grouped order tests passed successfully!");
+
   } catch (error) {
     console.log("\n❌ FAILED: Smoke detected!");
     console.error("💥 Error:", error);
@@ -216,4 +195,4 @@ async function runTest() {
   }
 }
 
-runTest();
+runTest(); 
