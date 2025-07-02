@@ -49,17 +49,10 @@ export interface CreateOrderParams {
 }
 
 // Utility interface for individual orders in grouped orders
-export interface GroupedOrderParams {
-  marketIndex: number;
-  baseAmount: number;
-  price: number;
-  isAsk: number; // 0 = buy, 1 = sell
-  type: number;
-  timeInForce: number;
-  reduceOnly: number;
-  triggerPrice: number;
-  orderExpiry: number; // -1 for default (28 days)
-}
+export type GroupedOrderParams = Omit<
+  CreateOrderParams,
+  "nonce" | "clientOrderIndex"
+>;
 
 // Utility interface for CreateGroupedOrders parameters
 export interface CreateGroupedOrdersParams {
