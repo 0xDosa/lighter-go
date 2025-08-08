@@ -17,7 +17,10 @@ import (
 )
 
 // Global client instance (same as original)
-var txClient *client.TxClient
+var (
+	txClient        *client.TxClient
+	backupTxClients map[uint8]*client.TxClient
+)
 
 // validateArg checks if a JavaScript argument at the given index is valid (not null/undefined)
 func validateArg(args []js.Value, index int, argName string) error {
@@ -164,6 +167,10 @@ func createClient(this js.Value, args []js.Value) any {
 		jsonBytes, _ := json.Marshal(response)
 		return js.ValueOf(string(jsonBytes))
 	}
+	if backupTxClients == nil {
+		backupTxClients = make(map[uint8]*client.TxClient)
+	}
+	backupTxClients[apiKeyIndex] = txClient
 
 	// Success case - return empty error response
 	jsonBytes, err := json.Marshal(response)
@@ -220,28 +227,29 @@ func checkClient(this js.Value, args []js.Value) (result any) {
 	accountIndex := int64(args[1].Int())
 
 	// Check if client exists
-	if txClient == nil {
-		response.Error = "client is not created, call CreateClient() first"
+	client, ok := backupTxClients[apiKeyIndex]
+	if !ok {
+		response.Error = "api key not registered"
 		jsonBytes, _ := json.Marshal(response)
 		return js.ValueOf(string(jsonBytes))
 	}
 
 	// Validate apiKeyIndex matches
-	if txClient.GetApiKeyIndex() != apiKeyIndex {
-		response.Error = fmt.Sprintf("apiKeyIndex does not match. expected %v but got %v", txClient.GetApiKeyIndex(), apiKeyIndex)
+	if client.GetApiKeyIndex() != apiKeyIndex {
+		response.Error = fmt.Sprintf("apiKeyIndex does not match. expected %v but got %v", client.GetApiKeyIndex(), apiKeyIndex)
 		jsonBytes, _ := json.Marshal(response)
 		return js.ValueOf(string(jsonBytes))
 	}
 
 	// Validate accountIndex matches
-	if txClient.GetAccountIndex() != accountIndex {
-		response.Error = fmt.Sprintf("accountIndex does not match. expected %v but got %v", txClient.GetAccountIndex(), accountIndex)
+	if client.GetAccountIndex() != accountIndex {
+		response.Error = fmt.Sprintf("accountIndex does not match. expected %v but got %v", client.GetAccountIndex(), accountIndex)
 		jsonBytes, _ := json.Marshal(response)
 		return js.ValueOf(string(jsonBytes))
 	}
 
 	// Check that the API key registered on Lighter matches this one
-	key, err := txClient.HTTP().GetApiKey(accountIndex, apiKeyIndex)
+	key, err := client.HTTP().GetApiKey(accountIndex, apiKeyIndex)
 	if err != nil {
 		response.Error = fmt.Sprintf("failed to get Api Keys. err: %v", err)
 		jsonBytes, _ := json.Marshal(response)
@@ -249,7 +257,7 @@ func checkClient(this js.Value, args []js.Value) (result any) {
 	}
 
 	// Get our public key and format it
-	pubKeyBytes := txClient.GetKeyManager().PubKeyBytes()
+	pubKeyBytes := client.GetKeyManager().PubKeyBytes()
 	pubKeyStr := hexutil.Encode(pubKeyBytes[:])
 	pubKeyStr = strings.Replace(pubKeyStr, "0x", "", 1)
 
@@ -909,8 +917,8 @@ func signTransfer(this js.Value, args []js.Value) any {
 	}()
 
 	// Validate argument count
-	if len(args) != 3 {
-		response.Error = "signTransfer requires 3 arguments: toAccountIndex, usdcAmount, nonce"
+	if len(args) != 5 {
+		response.Error = "signTransfer requires 5 arguments: toAccountIndex, usdcAmount, fee, memo, nonce"
 		jsonBytes, _ := json.Marshal(response)
 		return js.ValueOf(string(jsonBytes))
 	}
@@ -926,7 +934,17 @@ func signTransfer(this js.Value, args []js.Value) any {
 		jsonBytes, _ := json.Marshal(response)
 		return js.ValueOf(string(jsonBytes))
 	}
-	if err := validateArg(args, 2, "nonce"); err != nil {
+	if err := validateArg(args, 2, "fee"); err != nil {
+		response.Error = err.Error()
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+	if err := validateArg(args, 3, "memo"); err != nil {
+		response.Error = err.Error()
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+	if err := validateArg(args, 4, "nonce"); err != nil {
 		response.Error = err.Error()
 		jsonBytes, _ := json.Marshal(response)
 		return js.ValueOf(string(jsonBytes))
@@ -942,12 +960,41 @@ func signTransfer(this js.Value, args []js.Value) any {
 	// Extract parameters from JavaScript arguments
 	toAccountIndex := int64(args[0].Int())
 	usdcAmount := int64(args[1].Int())
-	nonce := int64(args[2].Int())
+	fee := int64(args[2].Int())
+	memoStr := args[3].String()
+	nonce := int64(args[4].Int())
+
+	// Handle memo - allow empty string for zero memo
+	memo := [32]byte{} // Initialize with zeros
+
+	if memoStr != "" {
+		// Validate memo length (should be 64 hex characters for 32 bytes)
+		if len(memoStr) != 64 {
+			response.Error = "memo expected to be 64 hex characters (32 bytes) or empty string"
+			jsonBytes, _ := json.Marshal(response)
+			return js.ValueOf(string(jsonBytes))
+		}
+		// Decode hex string to bytes
+		memoBytes, err := hexutil.Decode("0x" + memoStr)
+		if err != nil {
+			response.Error = fmt.Sprintf("invalid hex memo: %v", err)
+			jsonBytes, _ := json.Marshal(response)
+			return js.ValueOf(string(jsonBytes))
+		}
+		if len(memoBytes) != 32 {
+			response.Error = fmt.Sprintf("memo must be exactly 32 bytes, got %d", len(memoBytes))
+			jsonBytes, _ := json.Marshal(response)
+			return js.ValueOf(string(jsonBytes))
+		}
+		copy(memo[:], memoBytes)
+	}
 
 	// Create transaction request
 	txInfo := &types.TransferTxReq{
 		ToAccountIndex: toAccountIndex,
 		USDCAmount:     usdcAmount,
+		Fee:            fee,
+		Memo:           memo,
 	}
 	ops := new(types.TransactOpts)
 	if nonce != -1 {
@@ -962,10 +1009,28 @@ func signTransfer(this js.Value, args []js.Value) any {
 		return js.ValueOf(string(jsonBytes))
 	}
 
-	// Marshal transaction to JSON
+	// === manually add MessageToSign to the response (same as original):
+	// - marshal the tx
+	// - unmarshal it into a generic map
+	// - add the new field
+	// - marshal it again
 	txInfoBytes, err := json.Marshal(tx)
 	if err != nil {
 		response.Error = fmt.Sprintf("failed to marshal transaction: %v", err)
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+	obj := make(map[string]interface{})
+	err = json.Unmarshal(txInfoBytes, &obj)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to unmarshal transaction: %v", err)
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+	obj["MessageToSign"] = tx.GetL1SignatureBody()
+	txInfoBytes, err = json.Marshal(obj)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to marshal final transaction: %v", err)
 		jsonBytes, _ := json.Marshal(response)
 		return js.ValueOf(string(jsonBytes))
 	}
@@ -1478,7 +1543,7 @@ func signUpdateMargin(this js.Value, args []js.Value) any {
 
 	// Extract parameters from JavaScript arguments
 	marketIndex := uint8(args[0].Int())
-	usdcAmount := uint64(args[1].Int())
+	usdcAmount := int64(args[1].Int())
 	direction := uint8(args[2].Int())
 	nonce := int64(args[3].Int())
 
@@ -1712,6 +1777,54 @@ func createAuthToken(this js.Value, args []js.Value) any {
 	return js.ValueOf(string(jsonBytes))
 }
 
+// Function #20: SwitchAPIKey (matches *C.char return - error only)
+func switchAPIKey(this js.Value, args []js.Value) any {
+	response := ErrorResponse{}
+
+	defer func() {
+		if r := recover(); r != nil {
+			response.Error = fmt.Sprintf("%v", r)
+		}
+	}()
+
+	// Validate argument count
+	if len(args) != 1 {
+		response.Error = "switchAPIKey requires 1 argument: apiKeyIndex"
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Validate all required arguments
+	if err := validateArg(args, 0, "apiKeyIndex"); err != nil {
+		response.Error = err.Error()
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	// Extract parameters from JavaScript arguments
+	apiKeyIndex := uint8(args[0].Int())
+
+	// Switch to the specified client
+	client, ok := backupTxClients[apiKeyIndex]
+	if !ok {
+		response.Error = "no client initialized for api key"
+		jsonBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(jsonBytes))
+	}
+
+	txClient = client
+
+	// Success case - return empty error response
+	jsonBytes, err := json.Marshal(response)
+	if err != nil {
+		response.Error = fmt.Sprintf("JSON marshal error: %v", err)
+		errorBytes, _ := json.Marshal(response)
+		return js.ValueOf(string(errorBytes))
+	}
+
+	return js.ValueOf(string(jsonBytes))
+}
+
 func main() {
 	fmt.Println("WASM Signer Library loaded")
 
@@ -1735,6 +1848,7 @@ func main() {
 	js.Global().Set("signUpdateMargin", js.FuncOf(signUpdateMargin))
 	js.Global().Set("signCreateGroupedOrders", js.FuncOf(signCreateGroupedOrders))
 	js.Global().Set("createAuthToken", js.FuncOf(createAuthToken))
+	js.Global().Set("switchAPIKey", js.FuncOf(switchAPIKey))
 
 	// Keep the program running
 	select {}

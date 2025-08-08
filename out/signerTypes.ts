@@ -490,6 +490,18 @@ export interface TransferTx {
   USDCAmount: number
 
   /**
+   * The transfer fee amount.
+   * @see Go type: int64
+   */
+  Fee: number
+
+  /**
+   * The 32-byte memo for the transfer, as an array of bytes.
+   * @see Go type: [32]byte
+   */
+  Memo: number[]
+
+  /**
    * The Unix millisecond timestamp when this transaction expires.
    * @see Go type: int64
    */
@@ -506,6 +518,13 @@ export interface TransferTx {
    * @see Go type: []byte
    */
   Sig: string
+
+  /**
+   * The human-readable message that was signed to generate the L1 signature.
+   * This is manually added in the Go WASM wrapper.
+   * @see Go type: string
+   */
+  MessageToSign: string
 }
 
 /**

@@ -134,6 +134,8 @@ declare global {
   function signTransfer(
     toAccountIndex: number,
     usdcAmount: number,
+    fee: number,
+    memo: string,
     nonce: number
   ): string;
   function signCreatePublicPool(
@@ -174,6 +176,9 @@ declare global {
 
   // Auth token creation
   function createAuthToken(deadline?: number): string;
+
+  // API key switching
+  function switchAPIKey(apiKeyIndex: number): string;
 
   // Go WASM runtime class
   class Go {
@@ -621,18 +626,22 @@ export class SignerWASM {
    * Sign a transfer transaction
    * @param toAccountIndex Destination account index
    * @param usdcAmount USDC amount to transfer
+   * @param fee Transfer fee amount
+   * @param memo 32-byte memo string
    * @param nonce Transaction nonce
-   * @returns Transaction object
+   * @returns Transaction object with MessageToSign field
    */
   async signTransfer(
     toAccountIndex: number,
     usdcAmount: number,
+    fee: number,
+    memo: string,
     nonce: number
   ): Promise<TransferTx> {
     await this.ensureReady();
 
     try {
-      const result = globalThis.signTransfer(toAccountIndex, usdcAmount, nonce);
+      const result = globalThis.signTransfer(toAccountIndex, usdcAmount, fee, memo, nonce);
       const response: TransactionResponse = JSON.parse(result);
 
       if (response.error) {
@@ -887,6 +896,28 @@ export class SignerWASM {
         throw error;
       }
       throw new Error(`CreateAuthToken failed: ${error}`);
+    }
+  }
+
+  /**
+   * Switch to a different API key client
+   * @param apiKeyIndex API key index to switch to
+   */
+  async switchAPIKey(apiKeyIndex: number): Promise<void> {
+    await this.ensureReady();
+
+    try {
+      const result = globalThis.switchAPIKey(apiKeyIndex);
+      const response: ErrorResponse = JSON.parse(result);
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(`SwitchAPIKey failed: ${error}`);
     }
   }
 

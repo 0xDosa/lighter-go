@@ -104,7 +104,7 @@ type UpdateLeverageTxReq struct {
 
 type UpdateMarginTxReq struct {
 	MarketIndex uint8
-	USDCAmount  uint64
+	USDCAmount  int64
 	Direction   uint8
 }
 
